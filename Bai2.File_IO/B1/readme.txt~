@@ -1,0 +1,4 @@
+BT: Tự tạo 1 file text và đọc nó từ 1 vị trí bất kỳ, tất cả đều sử dụng C
+Chạy:
+1. Biên dịch: make all
+2. Chạy: ./B1 <link to file> <position: SET/CUR/END> <offset from position><number of charaters>

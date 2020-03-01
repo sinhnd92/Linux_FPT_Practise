@@ -1,0 +1,5 @@
+I'm trying to cross compile a helloworld kernel (2.6.x) module for ARM architecture on my intel x86 host.
+
+The codesourcery tool chain for ARM is located at: /home/ravi/workspace/hawk/arm-2009q3
+
+The kernel source is located at :/home/ravi/workspace/hawk/linux-omapl1
