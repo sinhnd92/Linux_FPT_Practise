@@ -1,6 +1,6 @@
 description 
-	a program copy ls command function with a some argument pass via terminal
+	Viết một chương trình xử lý tham số đầu vào giống với câu lệnh ls. Ví dụ nếu call "my_ls -l" sẽ in ra dòng chữ hiện thị full property, nếu truyền -a sẽ in hiển thị file ẩn, nếu truyền -la sẽ in ra cả 2 dòng trên
 
 how to run ? 
 	1. "make all"
-	2. ./t -la
+	2. myls <path (can be bypass)> <option (must have)>

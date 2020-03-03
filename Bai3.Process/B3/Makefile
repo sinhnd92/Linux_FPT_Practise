@@ -1,7 +1,7 @@
 all:
 	gcc ls.c -o myls
 install:
-	$(shell cp myls /usr/bin)
+	$(shell sudo cp myls /usr/bin)
 clean:
 	rm myls
-	rm /usr/bin/myls
+	$(shell sudo rm /usr/bin/myls)
