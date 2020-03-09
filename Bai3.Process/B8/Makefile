@@ -1,7 +1,5 @@
 all:
-	gcc A.c -o A
-	gcc B.c -o B
-	gcc C.c -o C
-
+	gcc child.c -o child
+	gcc parent.c -o parent
 clean:
-	rm A B C
+	rm -f child parent temp.txt
