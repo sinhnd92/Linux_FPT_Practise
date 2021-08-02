@@ -3,4 +3,4 @@ user get a string is : "nguyen thanh tung" when read "/dev/my_misc_device" file
 
 how to run ?
 1. run "make all"
-2. ./read 
+2. ./read 7b 
