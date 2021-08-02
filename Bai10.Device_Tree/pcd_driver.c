@@ -1,5 +1,5 @@
 
-#include "pcd_functions.h"
+#include "pcd_define.h"
 
 
 #undef pr_fmt
@@ -21,6 +21,11 @@ int pcd_release(struct inode *inode, struct file *flip);
 int pcd_platform_driver_probe(struct platform_device *pdev);
 /* Called when the device is removed from the system */
 int pcd_platform_driver_remove(struct platform_device *pdev);
+
+int check_permission(int dev_perm, int acc_mode);
+struct device_platform_data* device_get_platdata_from_dt(struct device *dev);
+
+void print_device_info(struct device_platform_data * dev_plat_data, struct device_config dev_cfg);
 /*
 =======================================================================================
 								LOCAL VARIABLE
@@ -47,7 +52,7 @@ struct file_operations pcd_fops=
 };
 
 /* Device private data */
-driver_private_data driver_data;
+struct driver_private_data driver_data;
 
 /*
  * Struct used for matching a device
@@ -103,7 +108,7 @@ int pcd_platform_driver_probe(struct platform_device *pdev)
 	}
 
 	/* Dynamically allocate memory for the device private data  */
-	devm_kzalloc(dev_data, sizeof(*dev_data),GFP_KERNEL);
+	dev_data = devm_kzalloc(dev, sizeof(*dev_data),GFP_KERNEL);
 	if(!dev_data){
 		dev_info(dev,"Cannot allocate memory \n");
 		return -ENOMEM;
@@ -116,7 +121,7 @@ int pcd_platform_driver_probe(struct platform_device *pdev)
 
 	/* Dynamically allocate memory for the device buffer using size 
 	information from the platform data */
-	devm_kzalloc(dev_data->buffer,dev_data->data.size,GFP_KERNEL);
+	dev_data->buffer = devm_kzalloc(dev,dev_data->data.size,GFP_KERNEL);
 	if(!dev_data->buffer){
 		dev_info(dev,"Cannot allocate memory \n");
 		return -ENOMEM;
@@ -146,7 +151,7 @@ int pcd_platform_driver_probe(struct platform_device *pdev)
 		
 	}
 
-	pcdrv_data.total_devices++;
+	driver_data.total_devices++;
 
 	dev_info(dev,"Probe was successful\n");
 
@@ -156,20 +161,17 @@ int pcd_platform_driver_probe(struct platform_device *pdev)
 /*Called when the device is removed from the system */
 int pcd_platform_driver_remove(struct platform_device *pdev)
 {
-
-#if 1
-	struct pcdev_private_data  *dev_data = dev_get_drvdata(&pdev->dev);
+	struct device_private_data  *dev_data = dev_get_drvdata(&pdev->dev);
 
 	/*1. Remove a device that was created with device_create() */
-	device_destroy(driver_data.class_dev,driver_data->dev_num);
+	device_destroy(driver_data.class_dev,dev_data->dev_num);
 	
 	/*2. Remove a cdev entry from the system*/
 	cdev_del(&dev_data->cdev);
 
 
-	pcdrv_data.total_devices--;
+	driver_data.total_devices--;
 
-#endif 
 	dev_info(&pdev->dev,"A device is removed\n");
 	return 0;
 }
@@ -178,8 +180,8 @@ MODULE_DEVICE_TABLE(of, pcdev_dt_ids);
 
 static int __init pcd_platform_driver_init(void)
 {
+  	int ret;
   	pr_info("PCD: Init device driver for pseudo driver\n");
-  	int ret = -1;
 
   	/* Allocate device number */
   	ret = alloc_chrdev_region(&driver_data.device_num_base, 0, MAX_DEVICES, "pcdevs");
@@ -227,9 +229,9 @@ module_exit(pcd_platform_driver_cleanup);
 loff_t pcd_lseek(struct file *filp, loff_t offset, int whence)
 {
 
-	struct pcdev_private_data *pcdev_data = (struct pcdev_private_data*)filp->private_data;
+	struct device_private_data *pcdev_data = (struct device_private_data*)filp->private_data;
 
-	int max_size = pcdev_data->pdata.size;
+	int max_size = pcdev_data->data.size;
 	
 	loff_t temp;
 
@@ -266,9 +268,9 @@ loff_t pcd_lseek(struct file *filp, loff_t offset, int whence)
 
 ssize_t pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *f_pos)
 {
-	struct pcdev_private_data *pcdev_data = (struct pcdev_private_data*)filp->private_data;
+	struct device_private_data *pcdev_data = (struct device_private_data*)filp->private_data;
 
-	int max_size = pcdev_data->pdata.size;
+	int max_size = pcdev_data->data.size;
 
 	pr_info("Read requested for %zu bytes \n",count);
 	pr_info("Current file position = %lld\n",*f_pos);
@@ -296,9 +298,9 @@ ssize_t pcd_read(struct file *filp, char __user *buff, size_t count, loff_t *f_p
 
 ssize_t pcd_write(struct file *filp, const char __user *buff, size_t count, loff_t *f_pos)
 {
-	struct pcdev_private_data *pcdev_data = (struct pcdev_private_data*)filp->private_data;
+	struct device_private_data *pcdev_data = (struct device_private_data*)filp->private_data;
 
-	int max_size = pcdev_data->pdata.size;
+	int max_size = pcdev_data->data.size;
 	
 	pr_info("Write requested for %zu bytes\n",count);
 	pr_info("Current file position = %lld\n",*f_pos);
@@ -338,7 +340,7 @@ int pcd_open(struct inode *inode, struct file *filp)
 
 	int minor_n;
 	
-	struct pcdev_private_data *pcdev_data;
+	struct device_private_data *pcdev_data;
 
 	/*find out on which device file open was attempted by the user space */
 
@@ -346,13 +348,13 @@ int pcd_open(struct inode *inode, struct file *filp)
 	pr_info("minor access = %d\n",minor_n);
 
 	/*get device's private data structure */
-	pcdev_data = container_of(inode->i_cdev,struct pcdev_private_data,cdev);
+	pcdev_data = container_of(inode->i_cdev,struct device_private_data,cdev);
 
 	/*to supply device private data to other methods of the driver */
 	filp->private_data = pcdev_data;
 		
 	/*check permission */
-	ret = check_permission(pcdev_data->pdata.perm,filp->f_mode);
+	ret = check_permission(pcdev_data->data.permission,filp->f_mode);
 
 	(!ret)?pr_info("open was successful\n"):pr_info("open was unsuccessful\n");
 
@@ -364,6 +366,70 @@ int pcd_release(struct inode *inode, struct file *flip)
 	pr_info("release was successful\n");
 
 	return 0;
+}
+
+int check_permission(int dev_perm, int acc_mode)
+{
+
+	if(dev_perm == RDWR)
+		return 0;
+	
+	//ensures readonly access
+	if( (dev_perm == RDONLY) && ( (acc_mode & FMODE_READ) && !(acc_mode & FMODE_WRITE) ) )
+		return 0;
+	
+	//ensures writeonly access
+	if( (dev_perm == WRONLY) && ( (acc_mode & FMODE_WRITE) && !(acc_mode & FMODE_READ) ) )
+		return 0;
+
+	return -EPERM;
+}
+
+struct device_platform_data* device_get_platdata_from_dt(struct device *dev)
+{
+	struct device_node *dev_node = dev->of_node;
+	struct device_platform_data *pdata;
+
+	if(!dev_node)
+		/* this probe didnt happen because of device tree node */
+		return NULL;
+
+	pdata = devm_kzalloc(dev,sizeof(*pdata),GFP_KERNEL);
+
+	if(!pdata){
+		dev_info(dev,"Cannot allocate memory \n");
+		return ERR_PTR(-ENOMEM);
+	}
+
+	if(of_property_read_string(dev_node,"org,device-serial-num",&pdata->serial_number) ){
+		dev_info(dev,"Missing serial number property\n");
+		return ERR_PTR(-EINVAL);
+
+	}
+
+
+	if(of_property_read_u32(dev_node,"org,size",&pdata->size) ){
+		dev_info(dev,"Missing size property\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+	if(of_property_read_u32(dev_node,"org,perm",&pdata->permission) ){
+		dev_info(dev,"Missing permission property\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+
+	return pdata;
+}
+
+void print_device_info(struct device_platform_data * dev_plat_data, struct device_config dev_cfg)
+{
+	pr_info("PCD: Device serial number = %s\n",dev_plat_data->serial_number);
+	pr_info("PCD: Device size = %d\n", dev_plat_data->size);
+	pr_info("PCD: Device permission = %d\n",dev_plat_data->permission);
+
+	pr_info("PCD: Config item 1 = %d\n",dev_cfg.config_item1 );
+	pr_info("PCD: Config item 2 = %d\n",dev_cfg.config_item2 );
 }
 
 MODULE_LICENSE("GPL");
